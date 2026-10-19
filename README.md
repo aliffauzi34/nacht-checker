@@ -2,12 +2,18 @@
 
 App Next.js (App Router, TypeScript) untuk:
 
-1. **Cek** file video: VBR / CBR, dan berapa bitrate-nya (grafik bitrate per detik per file).
-2. **Ubah ke CBR secara masal** dengan bitrate bebas yang kamu input.
+1. **Cek Video & Audio**:
+   - Deteksi kestabilan bitrate video (CBR / VBR / Mendekati CBR) dengan grafik bitrate per detik.
+   - Deteksi detail audio: **Sample Rate Audio** (misal 48.000 Hz vs 44.100 Hz vs 96.000 Hz), Codec/Format (AAC, MP3, WAV, FLAC), Channel (Stereo/Mono), dan Bitrate Audio.
+   - Peringatan otomatis jika ditemukan variasi/selisih Sample Rate audio antar file yang dapat menyebabkan desync/audio drift saat editing atau streaming.
+2. **Standarisasi & Konversi Masal**:
+   - **Mode Cepat (Fast Normalization)**: Menyalin stream video tanpa encode ulang (`-c:v copy`), hanya me-resample dan menstandarkan audio ke sample rate target (misal 48 kHz AAC/WAV/MP3). Proses sangat kilat (1–3 detik/file).
+   - **Mode Video CBR**: Re-encode video menjadi CBR murni (x264 filler data) sekaligus menstandarkan audio sample rate.
+   - **Mode Audio Saja**: Ekstrak atau konversi semua media menjadi file audio seragam (WAV, MP3, AAC, FLAC).
 
 ## Persiapan
 
-Butuh **ffmpeg + ffprobe** terinstall (dengan libx264) dan Node.js 18.18+.
+Butuh **ffmpeg + ffprobe** terinstall (dengan libx264, libmp3lame, aac) dan Node.js 18.18+.
 
 ```bash
 # Ubuntu/Debian
@@ -20,40 +26,27 @@ sudo apt install ffmpeg
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000
-# produksi:
+npm run dev        # Mode Development: http://localhost:3000
+# Produksi:
 npm run build && npm start
 ```
 
-## Cara pakai
+## Cara Pakai
 
-1. Isi path folder (atau satu file) di server tempat app ini jalan, klik **Cek video**.
-2. Lihat tipe, bitrate video/audio, dan sparkline per file.
-3. Centang file (atau klik **Pilih yang bukan CBR**), isi **Bitrate video CBR (kbps)**, klik **Ubah ... ke CBR**.
-4. Hasil disimpan di `cbr_output/` di sebelah file asli (atau folder output pilihanmu). File asli tidak disentuh.
-
-## Cara deteksi
-
-Bitrate video dihitung per detik dari ukuran packet (ffprobe) pada 120 detik pertama.
-Lalu dihitung variasinya (standar deviasi / rata-rata):
-
-| Variasi | Hasil |
-|---|---|
-| ≤ 8% | CBR |
-| 8% – 20% | Mendekati CBR (misalnya VBR dengan batas maxrate) |
-| > 20% | VBR |
-
-Ini heuristik: file dengan adegan statis atau bitrate sangat rendah bisa terbaca beda dari header-nya.
-
-## Perintah ffmpeg yang dipakai
-
-```
--c:v libx264 -b:v Xk -minrate Xk -maxrate Xk -bufsize 2Xk -x264-params nal-hrd=cbr:force-cfr=1
-```
-
-`nal-hrd=cbr` membuat x264 menambah filler data sehingga bitrate benar-benar rata (cocok untuk live streaming/RTMP).
+1. Masukkan path folder (atau file media) di input path, klik **Cek Media**.
+2. Periksa daftar file:
+   - Kolom **Sample Rate Audio**: Menampilkan frekuensi sampling (misal `48.000 Hz` atau `44.100 Hz`). Jika ada perbedaan, sistem akan memberi badge kontras dan banner peringatan.
+   - Kolom **Bitrate Video**: Menampilkan grafik kestabilan bitrate per detik (sparkline) dan status CBR/VBR.
+3. Gunakan tombol cepat seleksi:
+   - **Pilih beda Sample Rate**: Otomatis memilih semua file yang sample rate audionya berbeda dari target (misal yang bukan 48 kHz).
+   - **Pilih bukan CBR**: Memilih file video yang bitrate-nya masih VBR.
+4. Pilih mode konversi di panel bawah:
+   - **⚡ Normalisasi Audio Cepat**: Hanya resample audio tanpa re-encode video (sangat cepat).
+   - **🎬 Re-encode Video ke CBR + Normalisasi Audio**: Video CBR + Audio seragam.
+   - **🎵 Ekstrak / Konversi ke File Audio Saja**: Output berupa file audio mandiri.
+5. Tentukan target Sample Rate (misal `48.000 Hz`), Format Audio (AAC/MP3/WAV/FLAC), Bitrate, dan Channel (Stereo/Mono), lalu klik tombol konversi.
+6. Hasil disimpan di folder output baru (`cbr_output/` atau `normalized_output/`). File asli aman dan tidak tersentuh.
 
 ## Keamanan
 
-App ini bisa membaca dan menulis file di server. **Jalankan lokal / di jaringan tertutup**, atau set
-`MEDIA_ROOT` di `.env.local` untuk membatasi folder yang bisa diakses, dan tambahkan autentikasi sebelum di-expose ke internet.
+App ini membaca dan menulis file lokal di filesystem server. **Jalankan lokal / di jaringan tertutup**, atau set `MEDIA_ROOT` di `.env.local` untuk membatasi folder yang bisa diakses.
